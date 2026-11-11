@@ -425,18 +425,6 @@
                             </label>
                         </div>
                         <div class="option-item">
-                            <label>
-                                <input type="checkbox" id="trimBorders" checked>
-                                裁剪多余边缘
-                            </label>
-                        </div>
-                        <div class="option-item">
-                            <label>
-                                <input type="checkbox" id="textOrientationCorrection" checked>
-                                文字方向矫正
-                            </label>
-                        </div>
-                        <div class="option-item">
                             <label style="flex: 0 0 auto;">手动旋转:</label>
                             <select id="manualRotation">
                                 <option value="0">0°</option>
@@ -459,16 +447,6 @@
                         <input type="range" class="param-slider" id="docDetection"
                                min="5" max="30" value="15" step="1">
                         <div class="param-hint">值越小检测越灵敏，适合低对比度场景</div>
-                    </div>
-
-                    <div class="param-item">
-                        <div class="param-label">
-                            <span>边缘对比度阈值</span>
-                            <span class="param-value" id="edgeContrastValue">20</span>
-                        </div>
-                        <input type="range" class="param-slider" id="edgeContrast"
-                               min="10" max="50" value="20" step="1">
-                        <div class="param-hint">值越小检测越灵敏，值越大要求边界越清晰</div>
                     </div>
 
                     <div class="param-item">
@@ -566,8 +544,6 @@
         const resetBtn = document.getElementById('resetBtn');
         const docDetectionSlider = document.getElementById('docDetection');
         const docDetectionValue = document.getElementById('docDetectionValue');
-        const edgeContrastSlider = document.getElementById('edgeContrast');
-        const edgeContrastValue = document.getElementById('edgeContrastValue');
         const outputQualitySlider = document.getElementById('outputQuality');
         const outputQualityValue = document.getElementById('outputQualityValue');
         const resetParamsBtn = document.getElementById('resetParams');
@@ -634,10 +610,6 @@
             docDetectionValue.textContent = e.target.value;
         });
 
-        edgeContrastSlider.addEventListener('input', (e) => {
-            edgeContrastValue.textContent = e.target.value;
-        });
-
         outputQualitySlider.addEventListener('input', (e) => {
             outputQualityValue.textContent = e.target.value;
         });
@@ -646,8 +618,6 @@
         resetParamsBtn.addEventListener('click', () => {
             docDetectionSlider.value = 15;
             docDetectionValue.textContent = 15;
-            edgeContrastSlider.value = 20;
-            edgeContrastValue.textContent = 20;
             outputQualitySlider.value = 95;
             outputQualityValue.textContent = 95;
             document.getElementById('binarize').checked = false;
@@ -714,8 +684,6 @@
             formData.append('detect_document', document.getElementById('detectDocument').checked);
             formData.append('deskew', document.getElementById('deskew').checked);
             formData.append('fix_orientation', document.getElementById('fixOrientation').checked);
-            formData.append('trim_borders', document.getElementById('trimBorders').checked);
-            formData.append('text_orientation_correction', document.getElementById('textOrientationCorrection').checked);
             formData.append('manual_rotation', document.getElementById('manualRotation').value);
             formData.append('debug', 'true');
             formData.append('min_edge_contrast', docDetectionSlider.value);
