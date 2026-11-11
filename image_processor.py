@@ -649,6 +649,89 @@ def _estimate_skew(gray, max_angle):
     return float(fine[int(np.argmax(fine_scores))]), conf
 
 
+def _detect_stroke_orientation(img):
+    """基于文字笔画方向检测图像方向（专为中文优化）
+
+    使用Hough直线检测分析文字笔画的主方向：
+    - 中文横笔画多 → 水平线段占主导 → 正立或倒置（0°/180°）
+    - 竖笔画多 → 竖直线段占主导 → 旋转了90°/270°
+
+    返回：(主方向角度 0/90/180/270, 置信度 0~1, 水平/垂直线段比例)
+    """
+    # 缩小图像加速处理
+    small, _ = _resize_max(_to_gray(img), ORIENT_MAX_SIDE)
+    h, w = small.shape
+
+    # 边缘检测（保留文字笔画边缘）
+    edges = cv2.Canny(small, 50, 150, apertureSize=3)
+
+    # Hough直线检测（检测文字笔画）
+    # 参数调优：rho=1, theta=π/180, threshold根据图像尺寸自适应
+    min_line_length = max(20, min(h, w) // 40)  # 最短线段长度
+    max_line_gap = max(5, min(h, w) // 100)      # 最大间隙
+    lines = cv2.HoughLinesP(edges, rho=1, theta=np.pi/180,
+                            threshold=max(30, min(h, w) // 20),
+                            minLineLength=min_line_length,
+                            maxLineGap=max_line_gap)
+
+    if lines is None or len(lines) == 0:
+        print(f"[DEBUG] 笔画检测: 未检测到直线段")
+        return 0, 0.0, 0.0
+
+    # 统计各方向的直线段
+    horizontal_lines = []  # 水平线段（-10° ~ +10°, 170° ~ 190°）
+    vertical_lines = []    # 竖直线段（80° ~ 100°, 260° ~ 280°）
+
+    for line in lines:
+        x1, y1, x2, y2 = line[0]
+        # 计算线段角度（0° = 水平向右，90° = 竖直向下）
+        angle = np.degrees(np.arctan2(y2 - y1, x2 - x1)) % 180
+        length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+        # 水平线段：0°±10° 或 180°±10°
+        if angle < 10 or angle > 170:
+            horizontal_lines.append((angle, length))
+        # 竖直线段：90°±10°
+        elif 80 < angle < 100:
+            vertical_lines.append((angle, length))
+
+    h_count = len(horizontal_lines)
+    v_count = len(vertical_lines)
+    total_count = h_count + v_count
+
+    if total_count < 10:
+        print(f"[DEBUG] 笔画检测: 有效线段太少 ({total_count})")
+        return 0, 0.0, 0.0
+
+    # 计算水平/竖直线段的总长度（加权）
+    h_length = sum(length for _, length in horizontal_lines)
+    v_length = sum(length for _, length in vertical_lines)
+    total_length = h_length + v_length
+
+    if total_length < 1:
+        return 0, 0.0, 0.0
+
+    h_ratio = h_length / total_length
+    v_ratio = v_length / total_length
+
+    print(f"[DEBUG] 笔画检测: 水平线段={h_count}({h_ratio:.1%}), 竖直线段={v_count}({v_ratio:.1%})")
+
+    # 判断主方向
+    if h_ratio > 0.6:  # 水平笔画占主导 → 正立或倒置
+        direction = 'horizontal'
+        confidence = min(1.0, h_ratio * 1.5)
+        print(f"[DEBUG] 笔画方向: 水平占主导 ({h_ratio:.1%}), 文字为正立或倒置")
+        return 0, confidence, h_ratio / (v_ratio + 0.01)  # 返回0°，后续通过标点判断是否倒置
+    elif v_ratio > 0.6:  # 竖直笔画占主导 → 需要旋转90°或270°
+        direction = 'vertical'
+        confidence = min(1.0, v_ratio * 1.5)
+        print(f"[DEBUG] 笔画方向: 竖直占主导 ({v_ratio:.1%}), 文字需要旋转90°/270°")
+        return 90, confidence, h_ratio / (v_ratio + 0.01)  # 返回90°，后续判断具体方向
+    else:
+        print(f"[DEBUG] 笔画方向: 不明确 (h={h_ratio:.1%}, v={v_ratio:.1%})")
+        return 0, 0.0, h_ratio / (v_ratio + 0.01)
+
+
 # ---------------- 方向判断 ----------------
 def _profile_feature(profile):
     """投影的变异系数 + 2×空白占比。文字行方向的投影起伏大、空白多。"""
@@ -675,10 +758,14 @@ def _text_direction(mask):
     if fr <= 0 or fc <= 0:
         return None, 1.0
     ratio = fr / fc
+    print(f"[DEBUG] 文字方向检测: fr={fr:.3f}, fc={fc:.3f}, ratio={ratio:.3f}")
     if ratio >= HORIZONTAL_RATIO:
+        print(f"[DEBUG] 判断为横排: ratio={ratio:.3f} >= {HORIZONTAL_RATIO}")
         return 'h', ratio
     if ratio <= 1.0 / VERTICAL_RATIO:
+        print(f"[DEBUG] 判断为竖排: ratio={ratio:.3f} <= {1.0/VERTICAL_RATIO:.3f} (1/{VERTICAL_RATIO})")
         return 'v', ratio
+    print(f"[DEBUG] 方向不确定: {1.0/VERTICAL_RATIO:.3f} < ratio={ratio:.3f} < {HORIZONTAL_RATIO}")
     return None, ratio
 
 
@@ -744,7 +831,7 @@ def _upright_score(mask):
 def _detect_orientation(img, detect_upside_down, aggressive=False):
     """返回 (需顺时针旋转的角度, 置信度 0~1, 翻转置信度)。
 
-    改进置信度计算：综合多个指标提高准确性。
+    改进版：结合笔画方向检测和投影特征，提高准确性。
     aggressive: 激进模式，降低所有方向判断的阈值
     """
     small, _ = _resize_max(_to_gray(img), ORIENT_MAX_SIDE)
@@ -752,7 +839,61 @@ def _detect_orientation(img, detect_upside_down, aggressive=False):
     ink = float(mask.mean())
     if ink < 0.002 or ink > 0.4:
         return 0, 0.0, 0.0
+
+    # 【新增】先用笔画方向检测判断大方向
+    stroke_rotation, stroke_conf, stroke_ratio = _detect_stroke_orientation(img)
+    print(f"[DEBUG] 笔画检测结果: rotation={stroke_rotation}°, confidence={stroke_conf:.2f}")
+
+    # 原有的投影特征检测
     direction, ratio = _text_direction(mask)
+    print(f"[DEBUG] 投影特征检测: direction={direction}, ratio={ratio:.2f}")
+
+    # 【关键改进】笔画方向检测优先级更高
+    if stroke_conf > 0.7:  # 笔画检测置信度高，优先使用
+        print(f"[DEBUG] 使用笔画检测结果（置信度高: {stroke_conf:.2f}）")
+
+        if stroke_rotation == 0:
+            # 笔画检测为水平 → 文字正立或倒置
+            # 使用标点检测判断是否倒置
+            punct, n, align = _upright_score(mask)
+            flip_confidence = 0.0
+
+            if detect_upside_down:
+                if n >= MIN_PUNCT_FOR_180:
+                    flip_confidence = min(1.0, -punct + 0.1 * (n / float(MIN_PUNCT_FOR_180)))
+
+                if aggressive:
+                    if n >= max(4, MIN_PUNCT_FOR_180 // 2) and punct <= -0.3:
+                        print(f"[DEBUG] 笔画+标点检测: 文字倒置 180°")
+                        return 180, stroke_conf, flip_confidence
+                else:
+                    if n >= MIN_PUNCT_FOR_180 and punct <= FLIP_180_SCORE and align <= 0.1:
+                        print(f"[DEBUG] 笔画+标点检测: 文字倒置 180°")
+                        return 180, stroke_conf, flip_confidence
+
+            print(f"[DEBUG] 笔画检测: 文字正立 0°")
+            return 0, stroke_conf, flip_confidence
+
+        elif stroke_rotation == 90:
+            # 笔画检测为竖直 → 需要旋转90°或270°
+            # 先旋转90°，用标点检测判断方向
+            punct, n, align = _upright_score(cv2.rotate(mask, cv2.ROTATE_90_CLOCKWISE))
+            total = (punct if n >= MIN_PUNCT_FOR_90 else 0.0) + 0.5 * align
+
+            # 置信度：结合笔画检测和标点检测
+            confidence = min(1.0, stroke_conf + 0.1 * min(n / float(MIN_PUNCT_FOR_90), 1.0))
+
+            if aggressive and n >= max(2, MIN_PUNCT_FOR_90 // 2):
+                result = 90 if total >= 0 else 270
+                print(f"[DEBUG] 笔画+标点检测: 旋转 {result}° (激进模式)")
+                return result, confidence, 0.0
+
+            result = 90 if total >= 0 else 270
+            print(f"[DEBUG] 笔画+标点检测: 旋转 {result}°")
+            return result, confidence, 0.0
+
+    # 【保留原逻辑】笔画检测置信度不高时，使用原投影特征检测
+    print(f"[DEBUG] 笔画检测置信度不高 ({stroke_conf:.2f})，使用投影特征检测")
 
     if direction == 'v':
         # 文字行是竖的：先按顺时针转 90° 评估，得分为负说明应逆时针转
@@ -1035,7 +1176,7 @@ def process_image(image_bytes, options=None):
         rotation, orient_conf, flip_conf = _detect_orientation(img, options.detect_upside_down, options.text_orientation_correction)
         print(f"[DEBUG] 方向检测（透视后）: rotation={rotation}°, confidence={orient_conf:.2f}, flip_confidence={flip_conf:.2f}, text_correction={options.text_orientation_correction}")
 
-        # 增加置信度阈值：只有置信度 > 0.5 才执行旋转
+        # 只有置信度足够高才执行旋转（保持原阈值0.5）
         if rotation and orient_conf > 0.5:
             img = _rotate90(img, rotation)
             steps.append('orientation')
