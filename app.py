@@ -88,11 +88,21 @@ def build_options(
     manual_rotation: Optional[str],
     output_format: Optional[str],
     quality: Optional[str],
+    output_quality: Optional[str],
+    min_edge_contrast: Optional[str],
+    binarize: Optional[str] = None,
+    text_orientation_correction: Optional[str] = None,
     debug: Optional[str] = None,
 ) -> ProcessOptions:
     """解析表单参数为处理选项，非法值回退为默认值"""
     fmt = (output_format or "JPEG").upper()
-    q = parse_int(quality, 90)
+    # 优先使用 output_quality，回退到 quality，最后默认 90
+    q = parse_int(output_quality or quality, 90)
+    # 解析 min_edge_contrast（10-50）
+    edge_contrast = parse_int(min_edge_contrast, None)
+    if edge_contrast is not None:
+        edge_contrast = max(10, min(50, edge_contrast))  # 限制范围
+
     return ProcessOptions(
         detect_document=parse_bool(detect_document, True),
         deskew=parse_bool(deskew, True),
@@ -101,6 +111,9 @@ def build_options(
         manual_rotation=parse_int(manual_rotation, 0, [0, 90, 180, 270]),
         output_format=fmt if fmt in ("JPEG", "JPG", "PNG") else "JPEG",
         quality=q if 1 <= q <= 100 else 90,
+        min_edge_contrast=edge_contrast,
+        binarize=parse_bool(binarize, False),
+        text_orientation_correction=parse_bool(text_orientation_correction, False),
         debug=parse_bool(debug, False),
     )
 
@@ -124,6 +137,10 @@ def process_image_endpoint(
     manual_rotation: Optional[str] = Form(None),
     output_format: Optional[str] = Form(None),
     quality: Optional[str] = Form(None),
+    output_quality: Optional[str] = Form(None),
+    min_edge_contrast: Optional[str] = Form(None),
+    binarize: Optional[str] = Form(None),
+    text_orientation_correction: Optional[str] = Form(None),
 ):
     """
     处理图像并返回处理后的图片（CPU密集任务，使用普通def让FastAPI放到线程池）
@@ -134,7 +151,8 @@ def process_image_endpoint(
     """
     image_data = read_upload(file)
     options = build_options(detect_document, deskew, fix_orientation, trim_borders,
-                            manual_rotation, output_format, quality)
+                            manual_rotation, output_format, quality, output_quality,
+                            min_edge_contrast, binarize, text_orientation_correction)
     result = run_process(image_data, options)
 
     # 返回图片，元数据放在header中
@@ -155,6 +173,10 @@ def process_image_json_endpoint(
     manual_rotation: Optional[str] = Form(None),
     output_format: Optional[str] = Form(None),
     quality: Optional[str] = Form(None),
+    output_quality: Optional[str] = Form(None),
+    min_edge_contrast: Optional[str] = Form(None),
+    binarize: Optional[str] = Form(None),
+    text_orientation_correction: Optional[str] = Form(None),
     debug: Optional[str] = Form(None),
 ):
     """
@@ -171,12 +193,18 @@ def process_image_json_endpoint(
                 "processed_size": [1654, 2339],
                 "processing_time_ms": 234.5
             },
-            "debug_image": "base64编码的调试图片（仅在debug=true时）"
+            "debug_image": "base64编码的调试图片（仅在debug=true时）",
+            "debug_images": {
+                "edges_image": "base64...",
+                "contours_image": "base64...",
+                "text_mask_image": "base64..."
+            }
         }
     """
     image_data = read_upload(file)
     options = build_options(detect_document, deskew, fix_orientation, trim_borders,
-                            manual_rotation, output_format, quality, debug)
+                            manual_rotation, output_format, quality, output_quality,
+                            min_edge_contrast, binarize, text_orientation_correction, debug)
     result = run_process(image_data, options)
 
     # 构建响应
@@ -189,6 +217,13 @@ def process_image_json_endpoint(
     # debug=true 时附带标注了检测四边形的调试图
     if result.debug_image_bytes is not None:
         response["debug_image"] = base64.b64encode(result.debug_image_bytes).decode("utf-8")
+
+    # 附带多张中间调试图
+    if result.debug_images:
+        response["debug_images"] = {
+            k: base64.b64encode(v).decode("utf-8")
+            for k, v in result.debug_images.items()
+        }
 
     return JSONResponse(content=response)
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>图像处理服务 - 文档扫描与矫正</title>
+    <title>文档扫描与矫正</title>
     <style>
         * {
             margin: 0;
@@ -13,260 +13,166 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            background: #ffffff;
+            color: #333;
             padding: 20px;
         }
 
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            font-size: 16px;
-            opacity: 0.9;
         }
 
         .main-content {
-            padding: 30px;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 30px;
         }
 
-        .upload-section {
-            margin-bottom: 30px;
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
         }
 
-        .upload-area {
-            border: 3px dashed #667eea;
-            border-radius: 8px;
-            padding: 60px 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: #f8f9fa;
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
         }
 
-        .upload-area:hover {
-            border-color: #764ba2;
-            background: #f0f0f5;
-        }
-
-        .upload-area.dragover {
-            border-color: #764ba2;
-            background: #e8e9ff;
-            transform: scale(1.02);
-        }
-
-        .upload-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-
-        .upload-text {
-            font-size: 18px;
-            color: #333;
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
             margin-bottom: 10px;
         }
 
-        .upload-hint {
+        .upload-area {
+            border: 2px dashed #d0d0d0;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .upload-area:hover {
+            border-color: #999;
+        }
+
+        .upload-area.dragover {
+            border-color: #666;
+            background: #fafafa;
+        }
+
+        .upload-text {
             font-size: 14px;
             color: #666;
+            margin-bottom: 5px;
+        }
+
+        .upload-hint {
+            font-size: 12px;
+            color: #999;
         }
 
         .options-section {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .options-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            color: #333;
-        }
-
-        .options-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
         .option-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-        }
-
-        .option-item label {
-            cursor: pointer;
-            user-select: none;
-            display: flex;
-            align-items: center;
             gap: 8px;
         }
 
-        .option-item input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-
-        .rotation-control {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .rotation-control select {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
-        .result-section {
-            display: none;
-            margin-top: 30px;
-        }
-
-        .result-section.active {
-            display: block;
-        }
-
-        .comparison-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-
-        @media (max-width: 768px) {
-            .comparison-container {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .image-panel {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            overflow: hidden;
-            background: #f8f9fa;
-        }
-
-        .image-panel-header {
-            background: #667eea;
-            color: white;
-            padding: 12px;
-            font-weight: bold;
-            text-align: center;
-        }
-
-        .image-panel-body {
-            padding: 15px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 300px;
-        }
-
-        .image-panel img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 4px;
-        }
-
-        .metadata-section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-
-        .metadata-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 15px;
+        .option-item label {
+            font-size: 13px;
             color: #333;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        .metadata-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
+        .option-item input[type="checkbox"] {
+            cursor: pointer;
         }
 
-        .metadata-item {
-            padding: 12px;
+        .option-item select {
+            flex: 1;
+            padding: 5px 8px;
+            border: 1px solid #d0d0d0;
+            font-size: 13px;
             background: white;
-            border-radius: 4px;
-            border-left: 4px solid #667eea;
         }
 
-        .metadata-label {
+        .param-item {
+            margin-bottom: 15px;
+        }
+
+        .param-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
             font-size: 12px;
             color: #666;
-            margin-bottom: 4px;
         }
 
-        .metadata-value {
-            font-size: 16px;
-            font-weight: bold;
+        .param-value {
+            font-weight: 600;
             color: #333;
         }
 
-        .actions-section {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
+        .param-slider {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            background: #e0e0e0;
+            outline: none;
+        }
+
+        .param-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #666;
+            cursor: pointer;
+        }
+
+        .param-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: #666;
+            cursor: pointer;
+            border: none;
+        }
+
+        .param-hint {
+            font-size: 10px;
+            color: #999;
+            margin-top: 5px;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .param-item {
+            margin-bottom: 15px;
         }
 
         .btn {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
+            padding: 8px 16px;
+            border: 1px solid #d0d0d0;
+            background: white;
+            font-size: 13px;
             cursor: pointer;
-            transition: all 0.3s;
-            font-weight: bold;
+            transition: all 0.2s;
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #5a6268;
-            transform: translateY(-2px);
+        .btn:hover:not(:disabled) {
+            background: #f5f5f5;
         }
 
         .btn:disabled {
@@ -274,10 +180,97 @@
             cursor: not-allowed;
         }
 
+        .btn-full {
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: #666;
+            color: white;
+            border-color: #666;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #555;
+        }
+
+        .right-panel {
+            min-height: 400px;
+        }
+
+        .result-grid {
+            display: grid;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .result-grid.main-results {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .result-grid.debug-results {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+
+        @media (max-width: 768px) {
+            .result-grid.main-results,
+            .result-grid.debug-results {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .result-item {
+            border: 1px solid #e0e0e0;
+        }
+
+        .result-label {
+            padding: 8px 12px;
+            background: #f8f8f8;
+            font-size: 12px;
+            color: #666;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .result-image {
+            padding: 10px;
+            background: white;
+            text-align: center;
+        }
+
+        .result-image img {
+            max-width: 100%;
+            height: auto;
+            cursor: pointer;
+        }
+
+        .metadata-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 12px;
+        }
+
+        .metadata-table td {
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .metadata-table td:first-child {
+            background: #f8f8f8;
+            color: #666;
+            width: 30%;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
         .loading {
             display: none;
             text-align: center;
-            padding: 30px;
+            padding: 50px 20px;
         }
 
         .loading.active {
@@ -285,12 +278,12 @@
         }
 
         .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            border: 3px solid #f0f0f0;
+            border-top: 3px solid #666;
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
+            width: 40px;
+            height: 40px;
+            animation: spin 0.8s linear infinite;
             margin: 0 auto 15px;
         }
 
@@ -299,114 +292,262 @@
             100% { transform: rotate(360deg); }
         }
 
+        .loading-text {
+            font-size: 13px;
+            color: #666;
+        }
+
         .error-message {
             display: none;
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            border-left: 4px solid #f5c6cb;
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #fcc;
+            font-size: 13px;
         }
 
         .error-message.active {
             display: block;
         }
 
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            color: #999;
+            font-size: 14px;
+        }
+
         .hidden {
             display: none;
+        }
+
+        .result-area {
+            display: none;
+        }
+
+        .result-area.active {
+            display: block;
+        }
+
+        /* 图片放大模态框 */
+        .image-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .image-modal.active {
+            display: flex;
+        }
+
+        .image-modal-content {
+            max-width: 90%;
+            max-height: 90%;
+            position: relative;
+        }
+
+        .image-modal img {
+            max-width: 100%;
+            max-height: 90vh;
+        }
+
+        .image-modal-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            background: white;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 20px;
+        }
+
+        .image-modal-title {
+            position: absolute;
+            bottom: -35px;
+            left: 0;
+            right: 0;
+            color: white;
+            text-align: center;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📄 图像处理服务</h1>
-            <p>文档扫描 · 透视矫正 · 倾斜修正 · 方向识别</p>
-        </div>
+        <div class="error-message" id="errorMessage"></div>
 
         <div class="main-content">
-            <div class="error-message" id="errorMessage"></div>
-
-            <div class="upload-section">
-                <div class="upload-area" id="uploadArea">
-                    <div class="upload-icon">📤</div>
-                    <div class="upload-text">点击或拖拽上传图片</div>
-                    <div class="upload-hint">支持 JPG, PNG, BMP, TIFF, WebP（最大10MB）</div>
+            <div class="left-panel">
+                <!-- 上传 -->
+                <div>
+                    <div class="section-title">上传图片</div>
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-text">点击或拖拽上传图片</div>
+                        <div class="upload-hint">支持 JPG, PNG, BMP, TIFF, WebP（最大10MB）</div>
+                    </div>
+                    <input type="file" id="fileInput" accept="image/*" class="hidden">
                 </div>
-                <input type="file" id="fileInput" accept="image/*" class="hidden">
-            </div>
 
-            <div class="options-section">
-                <div class="options-title">⚙️ 处理选项</div>
-                <div class="options-grid">
-                    <div class="option-item">
-                        <label>
-                            <input type="checkbox" id="detectDocument" checked>
-                            <span>检测文档边界</span>
-                        </label>
-                    </div>
-                    <div class="option-item">
-                        <label>
-                            <input type="checkbox" id="deskew" checked>
-                            <span>去除倾斜</span>
-                        </label>
-                    </div>
-                    <div class="option-item">
-                        <label>
-                            <input type="checkbox" id="fixOrientation" checked>
-                            <span>方向矫正</span>
-                        </label>
-                    </div>
-                    <div class="option-item">
-                        <label>
-                            <input type="checkbox" id="trimBorders" checked>
-                            <span>裁剪黑边</span>
-                        </label>
-                    </div>
-                    <div class="option-item rotation-control">
-                        <label for="manualRotation">手动旋转:</label>
-                        <select id="manualRotation">
-                            <option value="0">0°</option>
-                            <option value="90">90°</option>
-                            <option value="180">180°</option>
-                            <option value="270">270°</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <div>处理中，请稍候...</div>
-            </div>
-
-            <div class="result-section" id="resultSection">
-                <div class="comparison-container">
-                    <div class="image-panel">
-                        <div class="image-panel-header">原始图片（绿框为检测到的纸张边界）</div>
-                        <div class="image-panel-body">
-                            <img id="originalImage" src="" alt="原始图片">
+                <!-- 处理选项 -->
+                <div>
+                    <div class="section-title">处理选项</div>
+                    <div class="options-section">
+                        <div class="option-item">
+                            <label>
+                                <input type="checkbox" id="detectDocument" checked>
+                                检测文档边界
+                            </label>
                         </div>
-                    </div>
-                    <div class="image-panel">
-                        <div class="image-panel-header">处理后</div>
-                        <div class="image-panel-body">
-                            <img id="processedImage" src="" alt="处理后图片">
+                        <div class="option-item">
+                            <label>
+                                <input type="checkbox" id="deskew" checked>
+                                去除倾斜
+                            </label>
+                        </div>
+                        <div class="option-item">
+                            <label>
+                                <input type="checkbox" id="fixOrientation" checked>
+                                自动方向矫正
+                            </label>
+                        </div>
+                        <div class="option-item">
+                            <label>
+                                <input type="checkbox" id="trimBorders" checked>
+                                裁剪多余边缘
+                            </label>
+                        </div>
+                        <div class="option-item">
+                            <label>
+                                <input type="checkbox" id="textOrientationCorrection" checked>
+                                文字方向矫正
+                            </label>
+                        </div>
+                        <div class="option-item">
+                            <label style="flex: 0 0 auto;">手动旋转:</label>
+                            <select id="manualRotation">
+                                <option value="0">0°</option>
+                                <option value="90">90°</option>
+                                <option value="180">180°</option>
+                                <option value="270">270°</option>
+                            </select>
                         </div>
                     </div>
                 </div>
 
-                <div class="metadata-section">
-                    <div class="metadata-title">📊 处理信息</div>
-                    <div class="metadata-grid" id="metadataGrid"></div>
-                </div>
+                <!-- 参数调节 -->
+                <div>
+                    <div class="section-title">参数调节</div>
+                    <div class="param-item">
+                        <div class="param-label">
+                            <span>文档边界检测灵敏度</span>
+                            <span class="param-value" id="docDetectionValue">15</span>
+                        </div>
+                        <input type="range" class="param-slider" id="docDetection"
+                               min="5" max="30" value="15" step="1">
+                        <div class="param-hint">值越小检测越灵敏，适合低对比度场景</div>
+                    </div>
 
-                <div class="actions-section">
-                    <button class="btn btn-primary" id="downloadBtn">💾 下载处理后的图片</button>
-                    <button class="btn btn-secondary" id="resetBtn">🔄 重新上传</button>
+                    <div class="param-item">
+                        <div class="param-label">
+                            <span>边缘对比度阈值</span>
+                            <span class="param-value" id="edgeContrastValue">20</span>
+                        </div>
+                        <input type="range" class="param-slider" id="edgeContrast"
+                               min="10" max="50" value="20" step="1">
+                        <div class="param-hint">值越小检测越灵敏，值越大要求边界越清晰</div>
+                    </div>
+
+                    <div class="param-item">
+                        <div class="param-label">
+                            <span>输出质量</span>
+                            <span class="param-value" id="outputQualityValue">95</span>
+                        </div>
+                        <input type="range" class="param-slider" id="outputQuality"
+                               min="70" max="100" value="95" step="5">
+                        <div class="param-hint">影响输出文件大小和清晰度</div>
+                    </div>
+
+                    <div class="option-item" style="margin-top: 20px;">
+                        <label>
+                            <input type="checkbox" id="binarize">
+                            二值化处理
+                        </label>
+                    </div>
+                    <div class="param-hint" style="margin-left: 24px; margin-top: 4px; margin-bottom: 0;">将图像转换为黑白，适合文字文档</div>
+
+                    <button class="btn btn-full" id="resetParams" style="margin-top: 10px;">恢复默认参数</button>
                 </div>
             </div>
+
+            <div class="right-panel">
+                <!-- 空状态 -->
+                <div class="empty-state" id="emptyState">
+                    请从左侧上传需要处理的文档图片
+                </div>
+
+                <!-- 加载状态 -->
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <div class="loading-text">正在处理图像，请稍候...</div>
+                </div>
+
+                <!-- 结果区域 -->
+                <div class="result-area" id="resultArea">
+                    <!-- 主要结果：原始图和处理结果 -->
+                    <div class="result-grid main-results">
+                        <div class="result-item">
+                            <div class="result-label">原始图像</div>
+                            <div class="result-image">
+                                <img id="originalImage" src="" alt="原始图像">
+                            </div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">处理结果</div>
+                            <div class="result-image">
+                                <img id="processedImage" src="" alt="处理结果">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 调试结果：中间步骤可视化 -->
+                    <div class="result-grid debug-results" id="debugResultsGrid"></div>
+
+                    <!-- 元数据 -->
+                    <table class="metadata-table">
+                        <tbody id="metadataBody"></tbody>
+                    </table>
+
+                    <!-- 操作按钮 -->
+                    <div class="actions">
+                        <button class="btn btn-primary" id="downloadBtn">下载处理后图片</button>
+                        <button class="btn btn-primary" id="reprocessBtn" style="display: none;">应用新参数重新处理</button>
+                        <button class="btn" id="resetBtn">重新上传</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片放大模态框 -->
+    <div class="image-modal" id="imageModal">
+        <div class="image-modal-content">
+            <button class="image-modal-close" id="modalClose">&times;</button>
+            <img id="modalImage" src="" alt="放大查看">
+            <div class="image-modal-title" id="modalTitle"></div>
         </div>
     </div>
 
@@ -414,30 +555,116 @@
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const loading = document.getElementById('loading');
-        const resultSection = document.getElementById('resultSection');
+        const emptyState = document.getElementById('emptyState');
+        const resultArea = document.getElementById('resultArea');
         const errorMessage = document.getElementById('errorMessage');
         const originalImage = document.getElementById('originalImage');
         const processedImage = document.getElementById('processedImage');
-        const metadataGrid = document.getElementById('metadataGrid');
+        const metadataBody = document.getElementById('metadataBody');
         const downloadBtn = document.getElementById('downloadBtn');
+        const reprocessBtn = document.getElementById('reprocessBtn');
         const resetBtn = document.getElementById('resetBtn');
+        const docDetectionSlider = document.getElementById('docDetection');
+        const docDetectionValue = document.getElementById('docDetectionValue');
+        const edgeContrastSlider = document.getElementById('edgeContrast');
+        const edgeContrastValue = document.getElementById('edgeContrastValue');
+        const outputQualitySlider = document.getElementById('outputQuality');
+        const outputQualityValue = document.getElementById('outputQualityValue');
+        const resetParamsBtn = document.getElementById('resetParams');
+        const imageModal = document.getElementById('imageModal');
+        const modalImage = document.getElementById('modalImage');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalClose = document.getElementById('modalClose');
+        const debugResultsGrid = document.getElementById('debugResultsGrid');
 
+        let currentFile = null;
+        let lastUploadedFile = null;
         let processedImageBlob = null;
+        let debounceTimer = null;
 
-        // 上传区域点击事件
+        // 图片放大模态框
+        modalClose.addEventListener('click', () => {
+            imageModal.classList.remove('active');
+        });
+
+        imageModal.addEventListener('click', (e) => {
+            if (e.target === imageModal) {
+                imageModal.classList.remove('active');
+            }
+        });
+
+        function showImageModal(imgSrc, title) {
+            modalImage.src = imgSrc;
+            modalTitle.textContent = title;
+            imageModal.classList.add('active');
+        }
+
+        // 为所有结果图片添加点击放大
+        document.addEventListener('click', (e) => {
+            if (e.target.tagName === 'IMG' && e.target.closest('.result-image')) {
+                const label = e.target.closest('.result-item').querySelector('.result-label').textContent;
+                showImageModal(e.target.src, label);
+            }
+        });
+
+        // 参数变化自动重新处理（Gradio 风格）
+        function handleParamChange() {
+            if (lastUploadedFile) {
+                // 清除之前的定时器
+                if (debounceTimer) clearTimeout(debounceTimer);
+                // 延迟 500ms 后处理（避免滑块拖动时频繁触发）
+                debounceTimer = setTimeout(() => {
+                    processImage(lastUploadedFile);
+                }, 500);
+            }
+        }
+
+        // 绑定所有参数变化事件
+        document.querySelectorAll('input[type="checkbox"], select').forEach(el => {
+            el.addEventListener('change', handleParamChange);
+        });
+
+        // 滑块使用 input 事件（实时响应，但用 debounce 防抖）
+        document.querySelectorAll('input[type="range"]').forEach(el => {
+            el.addEventListener('input', handleParamChange);
+        });
+
+        // 参数滑块（保持实时显示数值）
+        docDetectionSlider.addEventListener('input', (e) => {
+            docDetectionValue.textContent = e.target.value;
+        });
+
+        edgeContrastSlider.addEventListener('input', (e) => {
+            edgeContrastValue.textContent = e.target.value;
+        });
+
+        outputQualitySlider.addEventListener('input', (e) => {
+            outputQualityValue.textContent = e.target.value;
+        });
+
+        // 恢复默认参数
+        resetParamsBtn.addEventListener('click', () => {
+            docDetectionSlider.value = 15;
+            docDetectionValue.textContent = 15;
+            edgeContrastSlider.value = 20;
+            edgeContrastValue.textContent = 20;
+            outputQualitySlider.value = 95;
+            outputQualityValue.textContent = 95;
+            document.getElementById('binarize').checked = false;
+            // 恢复默认后自动重新处理
+            handleParamChange();
+        });
+
+        // 上传
         uploadArea.addEventListener('click', () => {
             fileInput.click();
         });
 
-        // 文件选择事件
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (file) {
-                handleFile(file);
-            }
+            if (file) handleFile(file);
         });
 
-        // 拖拽事件
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadArea.classList.add('dragover');
@@ -458,41 +685,53 @@
             }
         });
 
-        // 处理文件上传
         async function handleFile(file) {
-            // 检查文件大小
             if (file.size > 10 * 1024 * 1024) {
-                showError('文件大小不能超过10MB');
+                showError('文件大小不能超过 10MB');
                 return;
             }
 
-            // 显示原始图片
+            currentFile = file;
+            lastUploadedFile = file; // 保存上传的文件，用于参数变化时自动重新处理
+            reprocessBtn.style.display = 'none';
+
             const reader = new FileReader();
             reader.onload = (e) => {
                 originalImage.src = e.target.result;
             };
             reader.readAsDataURL(file);
 
-            // 隐藏错误和结果
-            hideError();
-            resultSection.classList.remove('active');
+            await processImage(file);
+        }
 
-            // 构建表单数据
+        async function processImage(file) {
+            hideError();
+            emptyState.style.display = 'none';
+            resultArea.classList.remove('active');
+
             const formData = new FormData();
             formData.append('file', file);
             formData.append('detect_document', document.getElementById('detectDocument').checked);
             formData.append('deskew', document.getElementById('deskew').checked);
             formData.append('fix_orientation', document.getElementById('fixOrientation').checked);
             formData.append('trim_borders', document.getElementById('trimBorders').checked);
+            formData.append('text_orientation_correction', document.getElementById('textOrientationCorrection').checked);
             formData.append('manual_rotation', document.getElementById('manualRotation').value);
-            // 请求调试图：原图上标出检测到的纸张边界，也解决浏览器无法预览 TIFF 原图的问题
             formData.append('debug', 'true');
+            formData.append('min_edge_contrast', docDetectionSlider.value);
+            formData.append('output_quality', outputQualitySlider.value);
+            formData.append('binarize', document.getElementById('binarize').checked);
 
-            // 显示加载动画
+            // 调试：打印关键参数
+            console.log('=== API Request Parameters ===');
+            console.log('min_edge_contrast:', docDetectionSlider.value);
+            console.log('output_quality:', outputQualitySlider.value);
+            console.log('detect_document:', document.getElementById('detectDocument').checked);
+            console.log('==============================');
+
             loading.classList.add('active');
 
             try {
-                // 调用API
                 const response = await fetch('/api/v1/process/json', {
                     method: 'POST',
                     body: formData
@@ -503,103 +742,106 @@
                     try {
                         const errorData = await response.json();
                         if (errorData.detail) detail = errorData.detail;
-                    } catch (e) { /* 非 JSON 错误响应（如代理返回的 413） */ }
+                    } catch (e) {}
                     throw new Error(detail);
                 }
 
                 const data = await response.json();
 
-                // base64 转 Blob，供显示和下载
                 processedImageBlob = base64ToBlob(data.image, data.mime_type || 'image/jpeg');
                 if (processedImage.src.startsWith('blob:')) URL.revokeObjectURL(processedImage.src);
                 processedImage.src = URL.createObjectURL(processedImageBlob);
 
-                if (data.debug_image) {
-                    originalImage.src = 'data:image/jpeg;base64,' + data.debug_image;
-                }
+                // 处理调试图像 - 显示所有中间结果
+                debugResultsGrid.innerHTML = '';
+                const debugImages = data.debug_images || {};
+
+                // 定义调试图像映射（按优先级排序）
+                const debugImageMap = [
+                    { key: 'edges_image', label: '边缘检测 (Canny)' },
+                    { key: 'contours_image', label: '轮廓检测' },
+                    { key: 'text_mask_image', label: '文本区域掩码' },
+                    { key: 'binarized_image', label: '二值化结果' }
+                ];
+
+                // 遍历并显示所有可用的调试图像
+                debugImageMap.forEach(({ key, label }) => {
+                    if (debugImages[key]) {
+                        const src = 'data:image/jpeg;base64,' + debugImages[key];
+                        const item = document.createElement('div');
+                        item.className = 'result-item';
+                        item.innerHTML = `
+                            <div class="result-label">${label}</div>
+                            <div class="result-image">
+                                <img src="${src}" alt="${label}">
+                            </div>
+                        `;
+                        debugResultsGrid.appendChild(item);
+                    }
+                });
 
                 displayMetadata(data.metadata || {});
 
-                // 显示结果
-                resultSection.classList.add('active');
+                resultArea.classList.add('active');
+                reprocessBtn.style.display = 'none';
 
             } catch (error) {
                 showError(error.message);
+                emptyState.style.display = 'flex';
             } finally {
                 loading.classList.remove('active');
             }
         }
 
-        // 显示元数据
+        reprocessBtn.addEventListener('click', async () => {
+            if (!currentFile) return;
+            await processImage(currentFile);
+        });
+
         function displayMetadata(metadata) {
-            metadataGrid.innerHTML = '';
+            metadataBody.innerHTML = '';
 
             const items = [
-                {
-                    label: '原始尺寸',
-                    value: metadata.original_size ? `${metadata.original_size[0]} × ${metadata.original_size[1]}` : 'N/A'
-                },
-                {
-                    label: '处理后尺寸',
-                    value: metadata.processed_size ? `${metadata.processed_size[0]} × ${metadata.processed_size[1]}` : 'N/A'
-                },
-                {
-                    label: '旋转角度',
-                    value: `${metadata.rotation_applied || 0}°`
-                },
-                {
-                    label: '倾斜角度',
-                    value: metadata.deskew_angle ? `${metadata.deskew_angle.toFixed(2)}°` : '0°'
-                },
-                {
-                    label: '处理耗时',
-                    value: metadata.processing_time_ms ? `${metadata.processing_time_ms.toFixed(1)} ms` : 'N/A'
-                },
-                {
-                    label: '检测到文档',
-                    value: metadata.detected_quad ? '是' : '否'
-                },
-                {
-                    label: '方向置信度',
-                    value: metadata.orientation_confidence != null ? metadata.orientation_confidence.toFixed(2) : 'N/A'
-                },
-                {
-                    label: '执行步骤',
-                    value: metadata.steps && metadata.steps.length ? metadata.steps.join(' → ') : '无'
-                }
+                ['原始尺寸', metadata.original_size ? `${metadata.original_size[0]} × ${metadata.original_size[1]}` : 'N/A'],
+                ['处理后尺寸', metadata.processed_size ? `${metadata.processed_size[0]} × ${metadata.processed_size[1]}` : 'N/A'],
+                ['旋转角度', `${metadata.rotation_applied || 0}°`],
+                ['倾斜角度', metadata.deskew_angle ? `${metadata.deskew_angle.toFixed(2)}°` : '0°'],
+                ['处理耗时', metadata.processing_time_ms ? `${metadata.processing_time_ms.toFixed(1)} ms` : 'N/A'],
+                ['检测到文档', metadata.detected_quad ? '是' : '否'],
+                ['方向置信度', metadata.orientation_confidence != null ? metadata.orientation_confidence.toFixed(2) : 'N/A'],
+                ['执行步骤', metadata.steps && metadata.steps.length ? metadata.steps.join(' → ') : '无']
             ];
 
-            items.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'metadata-item';
-                div.innerHTML = `
-                    <div class="metadata-label">${item.label}</div>
-                    <div class="metadata-value">${item.value}</div>
-                `;
-                metadataGrid.appendChild(div);
+            items.forEach(([label, value]) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${label}</td><td>${value}</td>`;
+                metadataBody.appendChild(row);
             });
         }
 
-        // 下载按钮
         downloadBtn.addEventListener('click', () => {
             if (!processedImageBlob) return;
 
             const url = URL.createObjectURL(processedImageBlob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `processed_${Date.now()}.${processedImageBlob.type === 'image/png' ? 'png' : 'jpg'}`;
+            const ext = processedImageBlob.type === 'image/png' ? 'png' : 'jpg';
+            a.download = `document_processed_${Date.now()}.${ext}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
 
-        // 重置按钮
         resetBtn.addEventListener('click', () => {
             fileInput.value = '';
-            resultSection.classList.remove('active');
+            currentFile = null;
+            lastUploadedFile = null;
+            resultArea.classList.remove('active');
+            emptyState.style.display = 'flex';
             hideError();
             processedImageBlob = null;
+            reprocessBtn.style.display = 'none';
         });
 
         function base64ToBlob(b64, mime) {
@@ -609,13 +851,11 @@
             return new Blob([bytes], { type: mime });
         }
 
-        // 显示错误
         function showError(message) {
-            errorMessage.textContent = '❌ ' + message;
+            errorMessage.textContent = '错误: ' + message;
             errorMessage.classList.add('active');
         }
 
-        // 隐藏错误
         function hideError() {
             errorMessage.classList.remove('active');
         }
