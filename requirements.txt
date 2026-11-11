@@ -1,0 +1,7 @@
+# Python 3.8 兼容依赖（固定版本）
+numpy==1.24.4
+opencv-python-headless==4.10.0.84
+fastapi==0.110.3
+pydantic==2.7.4
+uvicorn==0.29.0
+python-multipart==0.0.9
