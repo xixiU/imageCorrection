@@ -2,6 +2,56 @@
 
 自动矫正扫描件：纸张检测与透视矫正 → 去倾斜 → 90° 方向矫正 → 裁黑边。纯 OpenCV + numpy，无深度学习模型，Python 3.8。
 
+## 后端版本切换
+
+本项目支持两种处理后端：
+
+1. **current（默认）**：当前优化版本
+   - 支持完整的纸张检测、去倾斜、方向矫正、裁边等功能
+   - 多尺度边缘检测、动态对比度阈值、笔画方向检测等增强算法
+   
+2. **original**：原始工程版本（参考 [evibhm/ImageCorrection](https://github.com/evibhm/ImageCorrection)）
+   - 完全复制参考工程的算法流程和参数
+   - 简单可靠的边缘检测和透视变换
+
+### 切换方法
+
+**方法1：环境变量**
+```bash
+# 使用原始工程版本
+export BACKEND=original
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
+
+# 使用当前优化版本（默认）
+export BACKEND=current
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+**方法2：命令行测试**
+```bash
+# 测试原始工程版本
+python image_processor_original.py input.jpg output_original.jpg
+
+# 测试当前优化版本
+python image_processor.py input.jpg output_current.jpg
+
+# 对比两种版本
+python test_backends.py input.jpg both
+```
+
+### 版本对比
+
+| 特性 | 原始工程版本 | 当前优化版本 |
+|------|-------------|-------------|
+| 纸张检测 | 单一Canny边缘检测 | 多尺度Canny + Otsu二值化 |
+| 对比度阈值 | 固定阈值 | 动态阈值（面积自适应） |
+| 去倾斜 | 不支持 | 支持（投影能量法） |
+| 方向矫正 | 不支持 | 支持（笔画+标点检测） |
+| 倒置检测 | 不支持 | 支持（标点位置分析） |
+| 裁边 | 不支持 | 支持（文字区域检测） |
+| 处理速度 | ~160ms | ~420ms |
+| 输出质量 | 基础矫正 | 全自动多步处理 |
+
 ## 快速开始
 
 ### 环境要求

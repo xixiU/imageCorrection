@@ -1,0 +1,30 @@
+{
+  "comment": "图像处理算法可调参数配置文件（将此文件重命名为 config.json 生效）",
+  "MAX_PIXELS": 60000000,
+  "DETECT_MAX_SIDE": 1000,
+  "MIN_DOC_AREA_RATIO": 0.2,
+  "MAX_DOC_AREA_RATIO": 0.97,
+  "MIN_EDGE_CONTRAST": 15.0,
+  "DOC_INSET_RATIO": 0.004,
+  "DESKEW_MAX_SIDE": 800,
+  "MIN_DESKEW_ANGLE": 0.3,
+  "MIN_SKEW_CONFIDENCE": 0.05,
+  "ORIENT_MAX_SIDE": 1600,
+  "HORIZONTAL_RATIO": 1.15,
+  "VERTICAL_RATIO": 1.3,
+  "MIN_PUNCT_FOR_90": 4,
+  "MIN_PUNCT_FOR_180": 8,
+  "FLIP_180_SCORE": -0.5,
+  "scenarios": {
+    "white_paper_light_desk": {
+      "comment": "白纸+浅色桌面场景",
+      "MIN_EDGE_CONTRAST": 10.0,
+      "MIN_DOC_AREA_RATIO": 0.15
+    },
+    "high_contrast": {
+      "comment": "高对比度场景（深色背景）",
+      "MIN_EDGE_CONTRAST": 25.0,
+      "MIN_DOC_AREA_RATIO": 0.25
+    }
+  }
+}

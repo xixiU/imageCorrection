@@ -11,8 +11,17 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import Response, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-# 导入核心处理模块（由 image_processor.py 提供）
-from image_processor import process_image, ProcessOptions, ProcessResult
+# 导入核心处理模块
+# 支持两个后端：current（当前优化版本）和 original（原始工程版本）
+import os
+BACKEND = os.environ.get('BACKEND', 'current').lower()
+
+if BACKEND == 'original':
+    print(f"[INFO] 使用原始工程后端（evibhm/ImageCorrection）")
+    from image_processor_original import process_image, ProcessOptions, ProcessResult
+else:
+    print(f"[INFO] 使用当前优化后端")
+    from image_processor import process_image, ProcessOptions, ProcessResult
 
 app = FastAPI(
     title="图像处理服务",
@@ -64,7 +73,7 @@ def root():
 @app.get("/health")
 def health_check():
     """健康检查端点"""
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "1.0.0", "backend": BACKEND}
 
 
 def read_upload(file: UploadFile) -> bytes:
@@ -98,24 +107,36 @@ def build_options(
     fmt = (output_format or "JPEG").upper()
     # 优先使用 output_quality，回退到 quality，最后默认 90
     q = parse_int(output_quality or quality, 90)
-    # 解析 min_edge_contrast（10-50）
-    edge_contrast = parse_int(min_edge_contrast, None)
-    if edge_contrast is not None:
-        edge_contrast = max(10, min(50, edge_contrast))  # 限制范围
 
-    return ProcessOptions(
-        detect_document=parse_bool(detect_document, True),
-        deskew=parse_bool(deskew, True),
-        fix_orientation=parse_bool(fix_orientation, True),
-        trim_borders=parse_bool(trim_borders, True),
-        manual_rotation=parse_int(manual_rotation, 0, [0, 90, 180, 270]),
-        output_format=fmt if fmt in ("JPEG", "JPG", "PNG") else "JPEG",
-        quality=q if 1 <= q <= 100 else 90,
-        min_edge_contrast=edge_contrast,
-        binarize=parse_bool(binarize, False),
-        text_orientation_correction=parse_bool(text_orientation_correction, False),
-        debug=parse_bool(debug, False),
-    )
+    # 根据后端类型构建不同的选项
+    if BACKEND == 'original':
+        # 原始工程后端：只支持基本参数
+        return ProcessOptions(
+            manual_rotation=parse_int(manual_rotation, 0, [0, 90, 180, 270]),
+            output_format=fmt if fmt in ("JPEG", "JPG", "PNG") else "JPEG",
+            quality=q if 1 <= q <= 100 else 95,
+            apply_adaptive_threshold=parse_bool(binarize, False),
+            debug=parse_bool(debug, False),
+        )
+    else:
+        # 当前优化后端：支持完整参数
+        edge_contrast = parse_int(min_edge_contrast, None)
+        if edge_contrast is not None:
+            edge_contrast = max(10, min(50, edge_contrast))
+
+        return ProcessOptions(
+            detect_document=parse_bool(detect_document, True),
+            deskew=parse_bool(deskew, True),
+            fix_orientation=parse_bool(fix_orientation, True),
+            trim_borders=parse_bool(trim_borders, True),
+            manual_rotation=parse_int(manual_rotation, 0, [0, 90, 180, 270]),
+            output_format=fmt if fmt in ("JPEG", "JPG", "PNG") else "JPEG",
+            quality=q if 1 <= q <= 100 else 90,
+            min_edge_contrast=edge_contrast,
+            binarize=parse_bool(binarize, False),
+            text_orientation_correction=parse_bool(text_orientation_correction, False),
+            debug=parse_bool(debug, False),
+        )
 
 
 def run_process(image_data: bytes, options: ProcessOptions) -> ProcessResult:

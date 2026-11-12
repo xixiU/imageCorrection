@@ -41,10 +41,10 @@ def _load_config():
 _config = _load_config()
 
 MAX_PIXELS = _config.get('MAX_PIXELS', 60000000)          # 解码后像素上限，防止超大图耗尽内存
-DETECT_MAX_SIDE = _config.get('DETECT_MAX_SIDE', 1000)         # 纸张检测时的工作分辨率
+DETECT_MAX_SIDE = _config.get('DETECT_MAX_SIDE', 1500)         # 纸张检测时的工作分辨率（从1000提高到1500，保留更多边缘细节）
 MIN_DOC_AREA_RATIO = _config.get('MIN_DOC_AREA_RATIO', 0.2)       # 纸张至少占画面的比例
 MAX_DOC_AREA_RATIO = _config.get('MAX_DOC_AREA_RATIO', 0.97)      # 超过该比例视为纸张铺满画面，不做透视
-MIN_EDGE_CONTRAST = _config.get('MIN_EDGE_CONTRAST', 10.0)       # 纸张边缘内外 LAB 色差下限，降低到10.0以减少漏检（默认15.0太严格）
+MIN_EDGE_CONTRAST = _config.get('MIN_EDGE_CONTRAST', 1.5)       # 纸张边缘内外 LAB 色差下限，降低到1.5以减少漏检（适应高拍仪低对比度场景）
 DOC_INSET_RATIO = _config.get('DOC_INSET_RATIO', -0.005)        # 透视前四角向外扩展比例（负值=向外扩展），避免裁掉边缘内容
 DESKEW_MAX_SIDE = _config.get('DESKEW_MAX_SIDE', 800)          # 去倾斜计算分辨率
 MIN_DESKEW_ANGLE = _config.get('MIN_DESKEW_ANGLE', 10.0)        # 只处理大角度倾斜，避免质量损失（从0.3提高到10.0）
@@ -189,8 +189,8 @@ def _rotate_image(img, angle, fill, expand):
         nh = int(np.ceil(h * cos + w * sin))
         m[0, 2] += nw / 2.0 - w / 2.0
         m[1, 2] += nh / 2.0 - h / 2.0
-    # 使用最高质量插值（LANCZOS4）避免质量损失
-    return cv2.warpAffine(img, m, (nw, nh), flags=cv2.INTER_LANCZOS4,
+    # 使用 INTER_LINEAR 保持文字清晰（与透视变换一致）
+    return cv2.warpAffine(img, m, (nw, nh), flags=cv2.INTER_LINEAR,
                           borderMode=cv2.BORDER_CONSTANT, borderValue=fill)
 
 
@@ -321,10 +321,12 @@ def _edge_contrast(lab, quad):
 def _find_document_quad(img_small, min_edge_contrast=None):
     """在缩小图上找纸张四边形，找不到返回 None。
 
-    优化策略：
-    1. 简化边缘检测，参考 evibhm/ImageCorrection 的简洁策略
-    2. 优先找最大轮廓，减少过滤
-    3. 降低色差阈值，减少漏检
+    参考原始工程 evibhm/ImageCorrection 的简洁策略：
+    1. 使用固定Canny参数（60, 240）
+    2. 简单膨胀1次（3x3）
+    3. 找最大轮廓
+    4. 简单凸包+多边形拟合
+    5. 严格检查四边形不贴边（关键！）
 
     参数：
         min_edge_contrast: 可选，动态覆盖全局 MIN_EDGE_CONTRAST
@@ -339,26 +341,26 @@ def _find_document_quad(img_small, min_edge_contrast=None):
     debug_edges = None
     debug_contours = None
 
-    # 优化1：简化 Canny 参数，使用更稳定的固定阈值
-    # 参考 evibhm/ImageCorrection: thresh1=60, thresh2=240 效果很好
-    med = float(np.median(gray))
-    for lo, hi in ((60, 180), (0.66 * med, 1.33 * med)):
-        edges = cv2.Canny(gray, lo, hi)
+    # 策略1：多尺度Canny参数（增强边缘检测）
+    for thresh1, thresh2 in [(60, 240), (30, 120)]:
+        edges = cv2.Canny(gray, thresh1, thresh2)
         if debug_edges is None:
-            debug_edges = edges.copy()  # 保存第一个edges用于调试
-        # 优化2：减少膨胀次数，避免边缘过度扩张
+            debug_edges = edges.copy()
+        # 简单膨胀1次，连接边缘
         edges = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
-        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-        cs, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        cs, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours.extend(cs)
+    print(f"[DEBUG] Canny多尺度边缘检测到 {len(contours)} 个外轮廓（累计）")
 
-    # 纸张通常比背景亮：Otsu 二值化后取外轮廓
+    # 策略2：Otsu二值化（适度形态学操作）
     _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # 适度形态学操作：kernel不超过2%（避免过度膨胀）
     k = max(5, int(min(h, w) * 0.02)) | 1
-    bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, np.ones((k, k), np.uint8))
-    bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, np.ones((k, k), np.uint8))
+    bw = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, np.ones((k, k), np.uint8), iterations=1)
+    bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, np.ones((k // 2, k // 2), np.uint8))
     cs, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours.extend(cs)
+    print(f"[DEBUG] Otsu二值化检测到 {len(cs)} 个外轮廓")
 
     # 绘制轮廓用于调试
     debug_contours = cv2.cvtColor(img_small.copy(), cv2.COLOR_BGR2RGB)
@@ -368,9 +370,9 @@ def _find_document_quad(img_small, min_edge_contrast=None):
 
     lab = cv2.cvtColor(img_small, cv2.COLOR_BGR2LAB).astype(np.float32)
     best, best_ratio = None, 0.0
-    filtered_count = {'too_small': 0, 'no_quad': 0, 'area_mismatch': 0, 'not_convex': 0, 'irregular': 0, 'low_contrast': 0}
+    filtered_count = {'too_small': 0, 'no_quad': 0, 'area_mismatch': 0, 'not_convex': 0, 'near_border': 0, 'low_contrast': 0}
 
-    # 优化3：按面积排序轮廓，优先处理大轮廓（参考 evibhm/ImageCorrection 找最大轮廓的策略）
+    # 策略3：按面积排序，找最大轮廓（参考原始工程）
     contours_with_area = [(cnt, cv2.contourArea(cv2.convexHull(cnt))) for cnt in contours]
     contours_sorted = sorted(contours_with_area, key=lambda x: x[1], reverse=True)
 
@@ -387,79 +389,128 @@ def _find_document_quad(img_small, min_edge_contrast=None):
         quad = _order_quad(quad)
         ratio = cv2.contourArea(quad) / area
 
-        # 只接受比当前最优更大的候选，减少色差计算次数
+        # 面积过滤
         if ratio < MIN_DOC_AREA_RATIO or ratio > MAX_DOC_AREA_RATIO or ratio <= best_ratio:
             filtered_count['area_mismatch'] += 1
             continue
+
+        # 凸性和角度检查
         if not cv2.isContourConvex(quad.reshape(-1, 1, 2)) or not _quad_angles_ok(quad):
             filtered_count['not_convex'] += 1
             continue
 
-        # 优化4：放宽不规则检查，只在极端情况下过滤
-        is_irregular, reason = _is_irregular_quad(quad, ratio)
-        if is_irregular and ratio < 0.4:  # 只有面积比很小且不规则时才过滤
-            filtered_count['irregular'] += 1
-            print(f"[DEBUG] 过滤不规则四边形: 面积比={ratio:.2%}, 原因={reason}")
+        # 【关键修复】严格检查四边形是否贴边（容差5px）
+        # 贴边说明检测到的是整个图像而不是纸张
+        margin = 5
+        near_border = False
+        for i, pt in enumerate(quad):
+            x, y = pt[0], pt[1]
+            if x < margin or x > w - margin or y < margin or y > h - margin:
+                near_border = True
+                print(f"[DEBUG] 四边形顶点{i}贴边: ({x:.1f}, {y:.1f}), 图像尺寸={w}x{h}")
+                break
+
+        if near_border:
+            filtered_count['near_border'] += 1
+            print(f"[DEBUG] 过滤贴边四边形: 面积比={ratio:.2%}（不是真实纸张边界）")
             continue
 
-        # 优化5：色差检查更宽松，或者对大面积轮廓跳过色差检查
+        # 【优化】动态对比度阈值：面积越大，要求越低（关键：适应高拍仪低对比度场景）
+        # - 面积 >= 40%: 对比度要求降低到原来的20%（0.3）
+        # - 面积 30-40%: 对比度要求降低到原来的40%（0.6）
+        # - 面积 < 30%: 正常要求（1.5）
         contrast = _edge_contrast(lab, quad)
-        if contrast < edge_contrast_threshold and ratio < 0.7:  # 大面积轮廓（>70%）跳过色差检查
+
+        if ratio >= 0.4:
+            threshold = edge_contrast_threshold * 0.2
+        elif ratio >= 0.3:
+            threshold = edge_contrast_threshold * 0.4
+        else:
+            threshold = edge_contrast_threshold
+
+        if contrast < threshold:
             filtered_count['low_contrast'] += 1
-            print(f"[DEBUG] 过滤轮廓: 面积比={ratio:.2%}, 对比度={contrast:.1f} < {edge_contrast_threshold}")
+            print(f"[DEBUG] 过滤轮廓: 面积比={ratio:.2%}, 对比度={contrast:.1f} < {threshold:.1f}（动态阈值）")
             continue
+
+        print(f"[DEBUG] 找到候选四边形: 面积比={ratio:.2%}, 对比度={contrast:.1f} >= {threshold:.1f}")
+
         best, best_ratio = quad, ratio
-        print(f"[DEBUG] 找到候选四边形: 面积比={ratio:.2%}, 对比度={contrast:.1f}")
         break  # 找到第一个有效的大轮廓就停止
 
     print(f"[DEBUG] 过滤统计: {filtered_count}, 最终检测到={'有效四边形' if best is not None else '无'}")
     if best is not None:
         print(f"[DEBUG] 最佳四边形: 面积比={best_ratio:.2%}, 坐标={best.tolist()}")
 
-    # 如果没有找到有效四边形，尝试找出被过滤的最大候选用于修复
-    # 优先找被对比度过滤的大面积轮廓（可能是低对比度纸张）
-    has_irregular = filtered_count.get('irregular', 0) > 0
+    # 没有找到有效四边形
+    has_irregular = False
     irregular_candidate = None
-
-    if best is None:
-        print(f"[DEBUG] 未找到有效四边形，尝试找出被过滤的最大候选用于修复")
-        max_ratio = 0.0
-
-        for cnt in contours:
-            hull = cv2.convexHull(cnt)
-            hull_area = cv2.contourArea(hull)
-            if hull_area < MIN_DOC_AREA_RATIO * area:
-                continue
-            quad = _contour_to_quad(hull)
-            if quad is None:
-                continue
-            quad = _order_quad(quad)
-            ratio = cv2.contourArea(quad) / area
-            if ratio < MIN_DOC_AREA_RATIO or ratio > MAX_DOC_AREA_RATIO:
-                continue
-
-            # 放宽所有检查：只要凸多边形和面积够大
-            if not cv2.isContourConvex(quad.reshape(-1, 1, 2)):
-                continue
-
-            # 找出面积最大的候选（不检查角度、对比度、不规则性）
-            if ratio > max_ratio:
-                irregular_candidate = quad
-                max_ratio = ratio
-                has_irregular = True  # 标记为不规则，需要修复
-
-        if irregular_candidate is not None:
-            print(f"[DEBUG] 找到被过滤的候选，面积比={max_ratio:.2%}，将尝试修复")
 
     return best, debug_edges, debug_contours, has_irregular, irregular_candidate
 
 
 def _fill_black_to_white(img):
-    """将图像中的黑色填充区域（透视变换产生）改为白色"""
-    # 检测接近黑色的区域（阈值设为50，覆盖深灰色）
-    mask = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) < 50
-    # 将黑色区域填充为白色
-    img[mask] = [255, 255, 255]
+    """将透视变换产生的黑边填充为白色，并裁剪掉边缘黑边
+
+    策略：
+    1. 使用连通组件分析，填充超大黑色区域（边框）
+    2. 裁剪四周的黑边和暗边
+    """
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
+
+    # 检测黑色区域（阈值50）
+    black_mask = (gray < 50).astype(np.uint8) * 255
+
+    # 统计黑色像素占比
+    black_ratio = black_mask.sum() / 255 / (h * w)
+
+    # 如果黑色像素很少（< 0.5%），说明没有明显黑边
+    if black_ratio < 0.005:
+        print(f"[DEBUG] 黑色像素占比很少 ({black_ratio*100:.2f}%)，跳过填充")
+    else:
+        # 连通组件分析
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(black_mask, connectivity=8)
+
+        # 计算面积阈值：只填充超大区域（> 1%图像面积）
+        area_threshold = h * w * 0.01
+
+        filled_count = 0
+        for i in range(1, num_labels):  # 跳过背景（标签0）
+            area = stats[i, cv2.CC_STAT_AREA]
+            if area > area_threshold:
+                # 这是大片黑色区域（透视变换边框），填充为白色
+                img[labels == i] = [255, 255, 255]
+                filled_count += 1
+                print(f"[DEBUG] 填充黑边区域 {i}: 面积={area} ({area/(h*w)*100:.2f}%)")
+
+        if filled_count == 0:
+            print(f"[DEBUG] 未检测到大片黑边（阈值={area_threshold/(h*w)*100:.1f}%），保持原图")
+
+    # 裁剪四周的黑边和暗边（阈值80，包括灰色边缘）
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    dark = gray < 80
+
+    # 行列投影，找到内容边界
+    row_has_content = (~dark).sum(axis=1) > w * 0.9  # 至少90%像素是亮的
+    col_has_content = (~dark).sum(axis=0) > h * 0.9
+
+    rows = np.nonzero(row_has_content)[0]
+    cols = np.nonzero(col_has_content)[0]
+
+    if len(rows) > 0 and len(cols) > 0:
+        y0, y1 = rows[0], rows[-1] + 1
+        x0, x1 = cols[0], cols[-1] + 1
+
+        # 确保裁剪区域合理（至少保留50%，允许裁剪较多暗边）
+        if (y1 - y0) * (x1 - x0) >= 0.5 * h * w and y1 > y0 and x1 > x0:
+            img = img[y0:y1, x0:x1]
+            print(f"[DEBUG] 裁剪暗边: ({x0},{y0})-({x1},{y1}), 输出尺寸: {img.shape[1]}x{img.shape[0]}")
+        else:
+            print(f"[DEBUG] 裁剪区域过小 ({(y1-y0)*(x1-x0)/(h*w)*100:.1f}%)，保持原图")
+    else:
+        print(f"[DEBUG] 未检测到明显暗边，保持原图")
+
     return img
 
 
@@ -546,6 +597,56 @@ def _inset_quad(quad, ratio):
     return (quad + (c - quad) * ratio).astype(np.float32)
 
 
+def _adjust_quad_inset_safe(quad, img_shape, base_ratio=-0.005):
+    """动态调整四边形扩展比例，避免超出图像边界（关键修复！）
+
+    策略：
+    - 检查四边形是否贴近边界（距离边界<10px）
+    - 贴近边界时：使用正值收缩，避免超出
+    - 远离边界时：使用负值扩展，避免裁掉内容
+
+    参数：
+        quad: 四边形顶点 [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+        img_shape: 图像尺寸 (h, w, ...)
+        base_ratio: 基础扩展比例（负值=向外扩展）
+
+    返回：
+        调整后的四边形
+    """
+    h, w = img_shape[:2]
+
+    # 检查四边形是否贴近边界（容差10px）
+    margin = 10
+    near_border = False
+    border_info = []
+
+    for i, pt in enumerate(quad):
+        x, y = pt[0], pt[1]
+        if x < margin:
+            near_border = True
+            border_info.append(f"点{i}贴近左边界(x={x:.1f})")
+        if x > w - margin:
+            near_border = True
+            border_info.append(f"点{i}贴近右边界(x={x:.1f})")
+        if y < margin:
+            near_border = True
+            border_info.append(f"点{i}贴近上边界(y={y:.1f})")
+        if y > h - margin:
+            near_border = True
+            border_info.append(f"点{i}贴近下边界(y={y:.1f})")
+
+    if near_border:
+        # 贴近边界时，使用正值收缩0.2%，避免超出
+        ratio = 0.002
+        print(f"[INFO] 四边形贴近边界 ({'; '.join(border_info)})，使用收缩比例 {ratio}")
+    else:
+        # 中央区域，使用负值扩展，避免裁掉内容
+        ratio = base_ratio
+        print(f"[INFO] 四边形在中央区域，使用扩展比例 {ratio}")
+
+    return _inset_quad(quad, ratio)
+
+
 def _expand_quad(quad, img_shape, expand_ratio=0.05):
     """向外扩展四边形边界，避免裁掉边缘内容（如标题）
 
@@ -582,11 +683,11 @@ def _expand_quad(quad, img_shape, expand_ratio=0.05):
 
 
 def _warp_quad(img, quad):
-    """透视变换到矩形，保持原始分辨率避免模糊
+    """透视变换到矩形，使用高质量插值保持文字清晰
 
-    优化：参考 evibhm/ImageCorrection 的精确实现
+    完全参考 evibhm/ImageCorrection 的实现：
     - 基于实际边长计算目标尺寸（不缩放）
-    - 使用双线性插值（默认），平衡质量和性能
+    - 统一使用 INTER_LINEAR（OpenCV默认，最适合文档扫描）
     """
     h_orig, w_orig = img.shape[:2]
     tl, tr, br, bl = quad
@@ -602,17 +703,16 @@ def _warp_quad(img, quad):
 
     wd, ht = max(maxWidth, 1), max(maxHeight, 1)
 
-    print(f"[DEBUG] 透视变换：输入图像 {w_orig}x{h_orig}, 目标尺寸 {wd}x{ht} (基于实际边长)")
+    print(f"[DEBUG] 透视变换：输入图像 {w_orig}x{h_orig}, 目标尺寸 {wd}x{ht}, 插值=INTER_LINEAR")
 
     dst = np.array([[0, 0], [wd - 1, 0], [wd - 1, ht - 1], [0, ht - 1]], np.float32)
     m = cv2.getPerspectiveTransform(quad.astype(np.float32), dst)
 
-    # 使用双线性插值（cv2.INTER_LINEAR，OpenCV 默认），白色边界填充
-    # 参考工程使用默认插值，效果很好，不需要 LANCZOS4
+    # 使用 INTER_LINEAR（默认插值，最适合文档扫描，与原始工程一致）
     result = cv2.warpPerspective(img, m, (wd, ht), flags=cv2.INTER_LINEAR,
                                  borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
 
-    print(f"[DEBUG] 透视变换完成：输出图像 {result.shape[1]}x{result.shape[0]}, 插值=INTER_LINEAR")
+    print(f"[DEBUG] 透视变换完成：输出图像 {result.shape[1]}x{result.shape[0]}")
     return result
 
 
@@ -683,7 +783,16 @@ def _detect_stroke_orientation(img):
     vertical_lines = []    # 竖直线段（80° ~ 100°, 260° ~ 280°）
 
     for line in lines:
-        x1, y1, x2, y2 = line[0]
+        # 兼容不同OpenCV版本的返回格式
+        if isinstance(line, (list, tuple)) and len(line) > 0:
+            coords = line[0] if isinstance(line[0], np.ndarray) else line
+        else:
+            coords = line
+
+        if len(coords) < 4:
+            continue
+
+        x1, y1, x2, y2 = coords[0], coords[1], coords[2], coords[3]
         # 计算线段角度（0° = 水平向右，90° = 竖直向下）
         angle = np.degrees(np.arctan2(y2 - y1, x2 - x1)) % 180
         length = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
@@ -1125,23 +1234,23 @@ def process_image(image_bytes, options=None):
 
             else:
                 # 优化：使用透视变换（默认，精确裁剪边界）
-                # 关键改进：不做收缩或向外微扩展，避免裁掉边缘内容
+                # 关键改进：动态调整inset，避免超出边界（方案3）
                 if has_irregular and irregular_candidate is not None:
                     print(f"[DEBUG] 检测到不规则边界，尝试补齐缺失角")
                     q_repaired = _repair_irregular_quad(irregular_candidate)
-                    quad = _inset_quad(q_repaired / scale, DOC_INSET_RATIO)
+                    quad = _adjust_quad_inset_safe(q_repaired / scale, img.shape, DOC_INSET_RATIO)
                     img = _warp_quad(img, quad)
                     img = _fill_black_to_white(img)
                     corner_repaired = True
                     steps.append('corner_repair')
                     print(f"[DEBUG] 缺角修复完成，透视矫正完成")
                 else:
-                    # 正常四边形，直接透视矫正（不收缩，微向外扩展）
-                    quad = _inset_quad(quad_scaled, DOC_INSET_RATIO)
+                    # 正常四边形，直接透视矫正（动态调整inset，避免超出边界）
+                    quad = _adjust_quad_inset_safe(quad_scaled, img.shape, DOC_INSET_RATIO)
                     img = _warp_quad(img, quad)
                     img = _fill_black_to_white(img)
                     steps.append('document_warp')
-                    print(f"[DEBUG] 检测到纸张四边形，透视矫正完成（DOC_INSET_RATIO={DOC_INSET_RATIO}）")
+                    print(f"[DEBUG] 检测到纸张四边形，透视矫正完成（动态调整inset）")
         else:
             print(f"[DEBUG] 未检测到纸张边界 (min_edge_contrast={options.min_edge_contrast or MIN_EDGE_CONTRAST})")
 
